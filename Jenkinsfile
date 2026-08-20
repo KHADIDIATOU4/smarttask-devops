@@ -1,47 +1,39 @@
 pipeline {
     agent any
-    environment {
-        IMAGE_NAME_BACKEND = 'khadidiatou12/smarttask-backend'
-        IMAGE_NAME_FRONTEND = 'khadidiatou12/smarttask-frontend'
-    }
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
                 checkout scm
             }
         }
-        stage('Docker Build') {
+        stage('Login to Docker Hub') {
             steps {
-                script {
-                    def tag = env.BRANCH_NAME == 'Prod' ? 'latest' : 'dev'
-                    sh "docker build -t ${IMAGE_NAME_BACKEND}:${tag} ./backend"
-                    sh "docker build -t ${IMAGE_NAME_FRONTEND}:${tag} ./frontend"
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                 }
             }
         }
-        stage('Docker Push') {
+        stage('Build and Push Backend') {
             steps {
                 script {
-                    def tag = env.BRANCH_NAME == 'Prod' ? 'latest' : 'dev'
-                    
-                    // Utilisation sécurisée des identifiants Jenkins
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', 
-                                                      usernameVariable: 'DOCKER_USER', 
-                                                      passwordVariable: 'DOCKER_PASS')]) {
-                        sh "echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin"
-                        sh "docker push ${IMAGE_NAME_BACKEND}:${tag}"
-                        sh "docker push ${IMAGE_NAME_FRONTEND}:${tag}"
+                    // Remplace "backend" par le nom de ton dossier backend si besoin
+                    app = docker.build("khadidiatou12/smarttask-backend:latest", "./backend")
+                    docker.withRegistry('', 'dockerhub-credentials') {
+                        app.push()
                     }
                 }
             }
         }
-    }
-    post {
-        success {
-            echo 'Pipeline exécuté avec succès ! Images poussées sur Docker Hub.'
-        }
-        failure {
-            echo 'Le pipeline a échoué. Vérifiez les logs.'
+        stage('Build and Push Frontend') {
+            steps {
+                script {
+                    // Remplace "frontend" par le nom de ton dossier frontend si besoin
+                    app = docker.build("khadidiatou12/smarttask-frontend:latest", "./frontend")
+                    docker.withRegistry('', 'dockerhub-credentials') {
+                        app.push()
+                    }
+                }
+            }
         }
     }
 }
